@@ -99,7 +99,7 @@ contract DefiAdapter {
     } 
 
     function depositToCompound() external {
-
+        
     }
 
     receive() external payable {
