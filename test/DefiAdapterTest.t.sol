@@ -8,7 +8,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {DefiAdapter} from "../src/DefiAdapter.sol";
 import {ILendingPool} from "../src/interfaces/ILendingPool.sol";
 import {IUniswapV2Router02} from "../src/interfaces/IUniswapV2Router02.sol";
-import {IComptroller} from "../src/interfaces/IComptroller.sol";
+import {ICometMain} from "../src/interfaces/ICometMain.sol";
 import {IPriceOracleGetter} from "../src/interfaces/IPriceOracleGetter.sol";
 
 contract DefiAdapterTest is Test {
@@ -20,7 +20,7 @@ contract DefiAdapterTest is Test {
     IERC20 private weth;
     ILendingPool private lendingPool;
     IUniswapV2Router02 private routerV2;
-    IComptroller private comptroller;
+    ICometMain private comet;
     IPriceOracleGetter private priceOracle;
 
     // Create user accounts
@@ -36,10 +36,10 @@ contract DefiAdapterTest is Test {
         usdc = IERC20(activeNetworkConfig.usdcAddress);
         weth = IERC20(activeNetworkConfig.wethAddress);
 
-        // Set up the lendingPool, routerV2 and comptroller addresses
+        // Set up the lendingPool, routerV2 and comet addresses
         lendingPool = ILendingPool(activeNetworkConfig.lendingPoolAddress);
         routerV2 = IUniswapV2Router02(activeNetworkConfig.routerV2Address);
-        comptroller = IComptroller(activeNetworkConfig.comptrollerAddress);
+        comet = ICometMain(activeNetworkConfig.cometAddress);
         priceOracle = IPriceOracleGetter(activeNetworkConfig.priceOracleAddress);
 
         // Fund the accounts with 1m usdc
@@ -74,7 +74,6 @@ contract DefiAdapterTest is Test {
         assertEq(aliceUsdcBalanceBefore - aliceUsdcBalanceAfter, amount);
         // Check if user's deposit on Aave has increased by 1000
         (uint256 totalCollateralETH, uint256 totalDebtETH, uint256 availableBorrowsETH, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor) = lendingPool.getUserAccountData(alice);
-        // assertEq((totalCollateralETH-totalCollateralETHBefore) * valueOf(address(weth)) / 1e18, amount);
         console.log("totalCollateralETH: ", totalCollateralETH);
         console.log("totalDebtETH: ", totalDebtETH);
         console.log("availableBorrowsETH: ", availableBorrowsETH);
@@ -123,7 +122,7 @@ contract DefiAdapterTest is Test {
         // Swap $500 worth of ETH to USDC
         uint256 swapAmount = 500;
         // Get eth price from Aave
-        uint256 usdcPriceInEth = priceOracle.getAssetPrice(address(usdc));
+        uint256 usdcPriceInEth = priceOracle.getAssetPrice(address(usdc)); // Price fetched from Aave, which is fetching from Chainlink
         console.log("usdcPriceInEth: ", usdcPriceInEth);
         uint256 ethEquivalentInWei = swapAmount * usdcPriceInEth;
 
@@ -151,6 +150,26 @@ contract DefiAdapterTest is Test {
         assertEq(aliceWethBalanceBefore - aliceWethBalanceAfter, ethEquivalentInWei);
         // Check if user's USDC balance has increased by 500
         assertGe(aliceUsdcBalanceAfter - aliceUsdcBalanceBefore, amountOutMin);
+    }
+
+    function testCompoundDeposit() external {
+        // Supply $500 usdc in Compound
+        uint256 supplyAmount = 500*1e6;
+        // Get user's USDC balance before supply
+        uint256 aliceUsdcBalanceBefore = usdc.balanceOf(alice);
+
+        // Approve the contract to spend WETH
+        vm.startPrank(alice);
+        usdc.approve(address(comet), supplyAmount);
+        // Supply the WETH in Compound
+        comet.supply(address(usdc), supplyAmount);
+        vm.stopPrank();
+
+        // Get user's WETH balance after supply
+        uint256 aliceUsdcBalanceAfter = usdc.balanceOf(alice);
+
+        // Check if the user's USDC balance has decreased by 500
+        assertEq(aliceUsdcBalanceBefore - aliceUsdcBalanceAfter, supplyAmount);
     }
 
 }

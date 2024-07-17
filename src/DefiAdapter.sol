@@ -25,9 +25,9 @@ pragma solidity 0.8.23;
 import "./Errors.sol";
 import {ILendingPool} from "./interfaces/ILendingPool.sol";
 import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
-import {IComptroller} from "./interfaces/IComptroller.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ICometMain} from "./interfaces/ICometMain.sol";
 
 contract DefiAdapter {
 
@@ -35,7 +35,7 @@ contract DefiAdapter {
 
     ILendingPool private lendingPool;
     IUniswapV2Router02 private routerV2;
-    IComptroller private comptroller;
+    ICometMain private comet;
 
     event Borrowed();
     event Deposited();
@@ -46,11 +46,11 @@ contract DefiAdapter {
     // aaveLendingPool: 0x8dff5e27ea6b7ac08ebfdf9eb090f32ee9a30fcf
     // uniswapRouter: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff
     // compound: 0x2F9E3953b2Ef89fA265f2a32ed9F80D00229125B
-    constructor(address aaveLendingPool, address uniswapRouter, address compoundController) {
+    constructor(address aaveLendingPool, address uniswapRouter, address cometMain) {
         // Store aave and compound protocol addresses
         lendingPool = ILendingPool(aaveLendingPool);
         routerV2 = IUniswapV2Router02(uniswapRouter);
-        comptroller = IComptroller(compoundController);
+        comet = ICometMain(cometMain);
     }
 
     // Approve this contract for USDC by the user for 'amount' value
@@ -98,8 +98,11 @@ contract DefiAdapter {
         }
     } 
 
-    function depositToCompound() external {
-        
+    // The user should have approved this contract on asset for 'amountIn' value
+    function depositToCompound(address asset, uint256 amount) external {
+        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(asset).approve(address(comet), amount);
+        comet.supply(asset, amount);
     }
 
     receive() external payable {

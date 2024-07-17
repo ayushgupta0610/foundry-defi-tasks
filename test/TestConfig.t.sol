@@ -10,7 +10,7 @@ struct NetworkConfig {
     address priceOracleAddress;
     address lendingPoolAddress;
     address routerV2Address;
-    address comptrollerAddress;
+    address cometAddress;
 }
 
 contract TestConfig is Test {
@@ -36,7 +36,7 @@ contract TestConfig is Test {
             priceOracleAddress: 0x0229F777B0fAb107F9591a41d5F02E4e98dB6f2d,
             lendingPoolAddress: 0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf,
             routerV2Address: 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff,
-            comptrollerAddress: 0x2F9E3953b2Ef89fA265f2a32ed9F80D00229125B
+            cometAddress: 0xF25212E676D1F7F89Cd72fFEe66158f541246445
         });
     }
 
