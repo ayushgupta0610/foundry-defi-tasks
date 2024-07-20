@@ -16,19 +16,14 @@ struct NetworkConfig {
 contract TestConfig is Test {
     NetworkConfig public activeNetworkConfig;
 
-    uint8 public constant DECIMALS = 8;
-    int256 public constant ETH_USD_PRICE = 2000e8;
-    int256 public constant WBTC_USD_PRICE = 60000e8;
-
     constructor() {
         if (block.chainid == 137) {
             activeNetworkConfig = getPolygonMainnetConfig();
         } else {
-            activeNetworkConfig = getOrCreateAnvilEthConfig();
+            activeNetworkConfig = getOrCreateAnvilPolygonConfig();
         }
     }
 
-    // wethAddress here stands for wmatic
     function getPolygonMainnetConfig() public pure returns (NetworkConfig memory) {
         return NetworkConfig({
             usdcAddress: 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174,
@@ -40,7 +35,7 @@ contract TestConfig is Test {
         });
     }
 
-    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
+    function getOrCreateAnvilPolygonConfig() public returns (NetworkConfig memory) {
         // if(activeNetworkConfig.wethUsdPriceFeed != address(0)) {
         //     return activeNetworkConfig;
         // }

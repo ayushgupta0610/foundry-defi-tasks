@@ -5,11 +5,11 @@ import {Test, console} from "forge-std/Test.sol";
 import {TestConfig, NetworkConfig} from "./TestConfig.t.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {DefiAdapter} from "../src/DefiAdapter.sol";
-import {ILendingPool} from "../src/interfaces/ILendingPool.sol";
-import {IUniswapV2Router02} from "../src/interfaces/IUniswapV2Router02.sol";
-import {ICometMain} from "../src/interfaces/ICometMain.sol";
-import {IPriceOracleGetter} from "../src/interfaces/IPriceOracleGetter.sol";
+import {DefiAdapter} from "../src/polygon/DefiAdapter.sol";
+import {ILendingPool} from "../src/polygon/interfaces/ILendingPool.sol";
+import {IUniswapV2Router02} from "../src/polygon/interfaces/IUniswapV2Router02.sol";
+import {ICometMain} from "../src/polygon/interfaces/ICometMain.sol";
+import {IPriceOracleGetter} from "../src/polygon/interfaces/IPriceOracleGetter.sol";
 
 contract DefiAdapterTest is Test {
 
@@ -31,7 +31,7 @@ contract DefiAdapterTest is Test {
     function setUp() public {
         TestConfig testConfig = new TestConfig();
 
-        // Set up the RPC_URL to fork the mainnet
+        // Set up the POLYGON_RPC_URL to fork the mainnet
         activeNetworkConfig = testConfig.getPolygonMainnetConfig();
         usdc = IERC20(activeNetworkConfig.usdcAddress);
         weth = IERC20(activeNetworkConfig.wethAddress);
