@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
-import {TestConfig, NetworkConfig} from "./TestConfig.t.sol";
+import {TestConfig, NetworkConfig} from "./TestConfigOnPolygon.t.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DefiAdapter} from "../src/polygon/DefiAdapter.sol";
@@ -12,7 +12,6 @@ import {ICometMain} from "../src/polygon/interfaces/ICometMain.sol";
 import {IPriceOracleGetter} from "../src/polygon/interfaces/IPriceOracleGetter.sol";
 
 contract DefiAdapterTest is Test {
-
     using SafeERC20 for IERC20;
 
     NetworkConfig private activeNetworkConfig;
@@ -37,28 +36,28 @@ contract DefiAdapterTest is Test {
         weth = IERC20(activeNetworkConfig.wethAddress);
 
         // Set up the lendingPool, routerV2 and comet addresses
-        lendingPool = ILendingPool(activeNetworkConfig.lendingPoolAddress);
+        lendingPool = ILendingPool(activeNetworkConfig.aavePoolAddress);
         routerV2 = IUniswapV2Router02(activeNetworkConfig.routerV2Address);
         comet = ICometMain(activeNetworkConfig.cometAddress);
         priceOracle = IPriceOracleGetter(activeNetworkConfig.priceOracleAddress);
 
         // Fund the accounts with 1m usdc
-        deal(address(usdc), alice, 1e6*1e6, true);
-        deal(address(usdc), bob, 1e6*1e6, true);
+        deal(address(usdc), alice, 1e6 * 1e6, true);
+        deal(address(usdc), bob, 1e6 * 1e6, true);
 
         // Fund the accounts with 100 weth
-        deal(address(weth), alice, 100*1e18, true);
-        deal(address(weth), bob, 100*1e18, true);
+        deal(address(weth), alice, 100 * 1e18, true);
+        deal(address(weth), bob, 100 * 1e18, true);
     }
 
     function testAaveDeposit() external {
         // Deposit 1000 USDC in Aave
         // Get user's USDC balance before deposit
         uint256 aliceUsdcBalanceBefore = usdc.balanceOf(alice);
-        uint256 amount = 1000*1e6;
+        uint256 amount = 1000 * 1e6;
         (uint256 totalCollateralETHBefore,,,,,) = lendingPool.getUserAccountData(alice);
         console.log("totalCollateralETHBefore: ", totalCollateralETHBefore);
-        
+
         // Approve the contract to spend USDC
         vm.startPrank(alice);
         usdc.approve(address(lendingPool), amount);
@@ -69,11 +68,18 @@ contract DefiAdapterTest is Test {
         // Get user's USDC balance after deposit
         uint256 aliceUsdcBalanceAfter = usdc.balanceOf(alice);
         vm.stopPrank();
-        
+
         // Check if the user's USDC balance has decreased by 1000
         assertEq(aliceUsdcBalanceBefore - aliceUsdcBalanceAfter, amount);
         // Check if user's deposit on Aave has increased by 1000
-        (uint256 totalCollateralETH, uint256 totalDebtETH, uint256 availableBorrowsETH, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor) = lendingPool.getUserAccountData(alice);
+        (
+            uint256 totalCollateralETH,
+            uint256 totalDebtETH,
+            uint256 availableBorrowsETH,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        ) = lendingPool.getUserAccountData(alice);
         console.log("totalCollateralETH: ", totalCollateralETH);
         console.log("totalDebtETH: ", totalDebtETH);
         console.log("availableBorrowsETH: ", availableBorrowsETH);
@@ -84,7 +90,7 @@ contract DefiAdapterTest is Test {
 
     function testAaveBorrow() external {
         // First deposit 1000 USDC in Aave
-        uint256 depositAmount = 1000*1e6;
+        uint256 depositAmount = 1000 * 1e6;
         // Approve the contract to spend USDC
         vm.startPrank(alice);
         usdc.approve(address(lendingPool), depositAmount);
@@ -100,7 +106,7 @@ contract DefiAdapterTest is Test {
         uint256 usdcPriceInEth = priceOracle.getAssetPrice(address(usdc));
         console.log("usdcPriceInEth: ", usdcPriceInEth);
         uint256 ethEquivalentInWei = borrowAmount * usdcPriceInEth;
-        
+
         // Get user's WETH balance before borrow
         uint256 aliceWethBalanceBefore = weth.balanceOf(alice);
 
@@ -154,7 +160,7 @@ contract DefiAdapterTest is Test {
 
     function testCompoundDeposit() external {
         // Supply $500 usdc in Compound
-        uint256 supplyAmount = 500*1e6;
+        uint256 supplyAmount = 500 * 1e6;
         // Get user's USDC balance before supply
         uint256 aliceUsdcBalanceBefore = usdc.balanceOf(alice);
 
@@ -171,5 +177,4 @@ contract DefiAdapterTest is Test {
         // Check if the user's USDC balance has decreased by 500
         assertEq(aliceUsdcBalanceBefore - aliceUsdcBalanceAfter, supplyAmount);
     }
-
 }
