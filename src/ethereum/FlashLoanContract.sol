@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {IPool} from "@aave/v3-core/contracts/interfaces/IPool.sol";
 import {IWrappedTokenGatewayV3} from "@aave/v3-periphery/contracts/misc/interfaces/IWrappedTokenGatewayV3.sol";
@@ -11,7 +12,6 @@ import {IVariableDebtToken} from "@aave/v3-core/contracts/interfaces/IVariableDe
 import {IFlashLoanSimpleReceiver} from "@aave/v3-core/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IPoolAddressesProvider} from "@aave/v3-core/contracts/interfaces/IPoolAddressesProvider.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
-// import {CometMainInterface} from "comet/contracts/CometMainInterface.sol";
 
 struct NetworkConfig {
     address usdcAddress;
@@ -28,6 +28,7 @@ struct NetworkConfig {
 contract FlashLoanContract is IFlashLoanSimpleReceiver {
     uint256 private constant ORACLE_PRECISION = 1e8;
     uint256 private constant ETH_PRECISION = 1e18;
+    address private constant ATOKEN_USDC_ADDRESS  = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
 
     IERC20 private usdc;
     IERC20 private weth;
@@ -37,9 +38,10 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
     IQuoter private quoter;
     ISwapRouter private swapRouter;
     ICreditDelegationToken private creditDelegationToken;
+    address private immutable alice;
 
     // Test task 1
-    constructor(NetworkConfig memory activeNetworkConfig) {
+    constructor(NetworkConfig memory activeNetworkConfig, address aliceAddress) {
         // Set up the ETHEREUM_RPC_URL to fork the ethereum mainnet
         usdc = IERC20(activeNetworkConfig.usdcAddress);
         weth = IERC20(activeNetworkConfig.wethAddress);
@@ -51,36 +53,54 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
         quoter = IQuoter(activeNetworkConfig.quoterAddress);
         swapRouter = ISwapRouter(activeNetworkConfig.swapRouterAddress);
         creditDelegationToken = ICreditDelegationToken(activeNetworkConfig.creditDelegationToken);
+        alice = aliceAddress;
         // comet = CometMainInterface(activeNetworkConfig.cometAddress);
     }
 
     // Initiate a flash loan on Aave contract
-    function initiateFlashLoan(address asset, uint256 amount, bytes calldata params) external {
-        // Execute the flash loan of $500 USDC from Aave
-        aavePool.flashLoanSimple(address(this), asset, amount, params, 0);
+    function initiateFlashLoan(address asset, uint256 amount, bytes calldata params, uint16 referralCode) external {
+        aavePool.flashLoanSimple(address(this), asset, amount, params, referralCode);
     }
 
     function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes calldata params)
         external
         returns (bool)
     {
-        // TODO: Write code here | Decode what params has to do
         require(msg.sender == address(aavePool), "CALLER_NOT_AAVE_POOL"); // To save on gas, this can be if Revert statement
         require(asset == address(usdc), "ASSET_NOT_USDC"); // CHECK if the asset needs to be USDC or ETH
         require(initiator == address(this), "CALLER_NOT_THIS_CONTRACT"); // CHECK if the initiator is this contract
 
-        // - approve aavePool to transfer amounts + premium
-        usdc.approve(address(aavePool), amount + premium);
+        // - repay debt of $500 weth which was borrowed from aave earlier
+        (,uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(alice);
+        console.log("Total debt base: ", totalDebtBase);
+        console.log("This contract's usdc balance before repay: ", usdc.balanceOf(address(this)));
+        uint256 amountBorrowed = 142 * 1e15;
+        weth.transferFrom(alice, address(this), amountBorrowed);
+        weth.approve(address(aavePool), amountBorrowed);
+        uint256 finalAmountRepaid = aavePool.repay(
+            address(weth),
+            amountBorrowed, // amountToBorrow + interest ~ amount
+            2,
+            alice
+        );
+        console.log("Final amount repaid: %d", finalAmountRepaid);
+        (uint256 totalCollateralBase, uint256 totalDebtBaseAfter,,,,) = aavePool.getUserAccountData(alice);
+        console.log("Total collateral after: %d", totalCollateralBase);
+        console.log("Total debt base after: %d", totalDebtBaseAfter);
 
-        // - first take flashloan from aave worth of $500 usdc
-        // - repay debt of $500 usdc which is borrowed earlier
-
-        // - withdraw $1000 usdc
+        // - withdraw $1000 usdc which was put as collateral initially
+        // Hardcoded the aToken address for USDC - 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
+        uint256 aliceBalance = IERC20(ATOKEN_USDC_ADDRESS).balanceOf(alice);
+        IERC20(ATOKEN_USDC_ADDRESS).transferFrom(alice, address(this), aliceBalance);
+        uint256 withdrawnAmount = aavePool.withdraw(address(usdc), totalCollateralBase / 10**2, alice);
+        console.log("Withdrawn collateral amount:", withdrawnAmount);
+        console.log("Alice's usdc balance after withdrawal: ", usdc.balanceOf(alice));
 
         // - repay flashloan $500 usdc + flashloanFee to aave
-
-        // - remaining $500 deposit into compound
-        // - now compound has $1000 usdc deposited
+        uint256 totalAmountToRepay = amount + premium;
+        usdc.transferFrom(alice, address(this), totalAmountToRepay);
+        usdc.approve(address(aavePool), totalAmountToRepay);
+        return true;
     }
 
     function ADDRESSES_PROVIDER() external pure override returns (IPoolAddressesProvider) {

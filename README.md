@@ -1,10 +1,10 @@
 ## Defi Tasks
 
-**Just some tasks**
+**Just some legos to interact with OG Defi protocols**
 
 The repo consists of the below Defi tasks:
 
-- First task on Matic with all V2 - Done (but separately)
+- First task on Polygon with all V2
     - Take $1000 USDC and deposit in Aave V2
     - Borrow $500 worth of ETH from Aave V2
     - Swap ETH to USDC($500) via Uniswap V2

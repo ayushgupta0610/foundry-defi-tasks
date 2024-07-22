@@ -34,7 +34,7 @@ contract DefiEthereumTest is Test {
 
     // Test task 1
     function setUp() public {
-        vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/zwN585WgUa5zXb2zRxaKLtVZtt20OI0X", 20346809); // Using a specific block for consistency
+        vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/<ALCHEMY_API_KEY>", 20346809); // Using a specific block for consistency
         TestConfigEthereum testConfig = new TestConfigEthereum();
 
         // Set up the ETHEREUM_RPC_URL to fork the ethereum mainnet
