@@ -20,7 +20,7 @@ contract TestConfigEthereum is Test {
             usdcAddress: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
             wethAddress: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
             aavePoolAddress: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2,
-            wrappedTokenGatewayAddress: 0xD322A49006FC828F9B5B37Ab215F99B4E5caB19C,
+            wrappedTokenGatewayAddress: 0x893411580e590D62dDBca8a703d61Cc4A8c7b2b9,
             creditDelegationToken: 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE,
             aavePriceOracleAddress: 0x54586bE62E3c3580375aE3723C145253060Ca0C2,
             quoterAddress: 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6,
