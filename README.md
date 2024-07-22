@@ -1,66 +1,21 @@
-## Foundry
+## Defi Tasks
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+**Just some tasks**
 
-Foundry consists of:
+The repo consists of the below Defi tasks:
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- First task on Matic with all V2 - Done (but separately)
+    - Take $1000 USDC and deposit in Aave V2
+    - Borrow $500 worth of ETH from Aave V2
+    - Swap ETH to USDC($500) via Uniswap V2
+    - Deposit $500 USDC in Compound V2 (doesn't exist on Polygon)
 
-## Documentation
+- Execute the first task on Ethereum with all Defi V3 protocols
+  
+- Second task on Ethereum with all V3 - Migrate position $1000 position to compound by paying the debt using flash loan
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+  - First take a flash loan from Aave worth of $500 USDC
+  - Repay debt of $500 USDC which was borrowed earlier
+  - Withdraw $1000 USDC
+  - Repay flash loan of $500 USDC + premium to Aave 
+  - Deposit remaining almost $500 USDC into compound - now compound has about $1000 USDC deposited in total
