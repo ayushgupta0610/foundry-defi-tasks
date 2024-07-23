@@ -129,7 +129,7 @@ contract DefiEthereumTest is Test {
         console.log("initialETHBalance: ", initialETHBalance);
         console.log("finalETHBalance: ", finalETHBalance);
         // Check that our ETH balance increased by the borrow amount
-        // assertEq(finalETHBalance - initialETHBalance, ethEquivalentInWei);
+        assertEq(initialUSDCBalance - finalUSDCBalance, amountToDeposit);
     }
 
     // Swap $500 worth of ETH to USDC on Uniswap V3

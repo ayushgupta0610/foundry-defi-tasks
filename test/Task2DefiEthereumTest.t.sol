@@ -57,12 +57,12 @@ contract DefiEthereumTest is Test {
         comet = CometMainInterface(activeNetworkConfig.cometAddress);
 
         // Fund the accounts with 1m usdc
-        deal(address(usdc), alice, 1e6 * 1e6, true);
-        deal(address(usdc), bob, 1e6 * 1e6, true);
+        deal(address(usdc), alice, 1000 * 1e6, true);
+        deal(address(usdc), bob, 1000 * 1e6, true);
 
         // Fund the accounts with 100 eth
-        deal(alice, 100 * 1e18);
-        deal(bob, 100 * 1e18);
+        deal(alice, 1 * 1e18);
+        deal(bob, 1 * 1e18);
     }
 
     function testMigratePosition() external {
@@ -79,20 +79,28 @@ contract DefiEthereumTest is Test {
         DataTypes.ReserveData memory reserveData = aavePool.getReserveData(asset);
         uint256 aTokenBalance = IERC20(reserveData.aTokenAddress).balanceOf(alice);
         IERC20(reserveData.aTokenAddress).approve(address(flashLoanContract), aTokenBalance);
-        console.log("aTokenBalance: ", aTokenBalance);
         console.log("aTokenAddress: ", reserveData.aTokenAddress);
+        console.log("Alice aTokenBalance: ", aTokenBalance);
 
         // Take a flash loan of $500 USDC from Aave
         bytes memory params = "";
         uint256 flashLoanAmount = 500 * 1e6; // $500 USDC
-        usdc.approve(address(flashLoanContract), type(uint256).max); // For flash loan contract to be able to allow alice to repay the loan to aavePool (interest + principal)
-        weth.approve(address(flashLoanContract), amountToBorrow); // For flash loan contract to be able to allow alice to repay the loan to aavePool (interest + principal)
-        uint256 premium = amountToBorrow * 9 / 1000; // 0.9% premium
-        weth.approve(address(flashLoanContract), amountToBorrow + premium); // For flash loan contract to be able to withdraw the loan from aavePool
+        usdc.approve(address(flashLoanContract), flashLoanAmount * 1009 / 1000); // For flash loan contract to be able to allow alice to repay the flash loan to aavePool (+ .09% premium)
+        weth.approve(address(flashLoanContract), amountToBorrow); // For flash loan contract to be able to allow alice to repay the borrowed amount to aavePool (interest + principal)
         flashLoanContract.initiateFlashLoan(address(usdc), flashLoanAmount, params, 0);
 
-        // - deposit the withdrawn amount ($1000) - premium - loan to compound
-        // - now compound has about less than $500 usdc deposited at this point
+        // Console log balances
+        console.log("Alice's usdc balance: ", usdc.balanceOf(alice));
+        console.log("Alice's weth balance: ", weth.balanceOf(alice));
+        console.log("Alice's aToken balance: ", IERC20(reserveData.aTokenAddress).balanceOf(alice));
+        console.log("FlashLoanContract usdc balance: ", usdc.balanceOf(address(flashLoanContract)));
+        console.log("FlashLoanContract weth balance: ", weth.balanceOf(address(flashLoanContract)));
+
+        assertLe(usdc.balanceOf(alice), amountToDeposit); // A bit of interest fees as well as premium were also deducted
+        assertEq(weth.balanceOf(alice), 0); // Alice should have no weth
+        assertEq(IERC20(reserveData.aTokenAddress).balanceOf(alice), 0); // Alice should have no aToken
+
+        // - deposit the withdrawn amount ($1000) - premium to compound
         // - close the position on compound
     }
 }

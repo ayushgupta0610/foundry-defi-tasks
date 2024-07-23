@@ -158,6 +158,7 @@ contract DefiAdapterTest is Test {
         assertGe(aliceUsdcBalanceAfter - aliceUsdcBalanceBefore, amountOutMin);
     }
 
+    // Compound is on v3 on Polygon
     function testCompoundDeposit() external {
         // Supply $500 usdc in Compound
         uint256 supplyAmount = 500 * 1e6;

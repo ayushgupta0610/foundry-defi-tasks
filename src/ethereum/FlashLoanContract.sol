@@ -28,7 +28,7 @@ struct NetworkConfig {
 contract FlashLoanContract is IFlashLoanSimpleReceiver {
     uint256 private constant ORACLE_PRECISION = 1e8;
     uint256 private constant ETH_PRECISION = 1e18;
-    address private constant ATOKEN_USDC_ADDRESS  = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    address private constant ATOKEN_USDC_ADDRESS = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
 
     IERC20 private usdc;
     IERC20 private weth;
@@ -62,7 +62,7 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
         aavePool.flashLoanSimple(address(this), asset, amount, params, referralCode);
     }
 
-    function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes calldata params)
+    function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes calldata)
         external
         returns (bool)
     {
@@ -71,7 +71,7 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
         require(initiator == address(this), "CALLER_NOT_THIS_CONTRACT"); // CHECK if the initiator is this contract
 
         // - repay debt of $500 weth which was borrowed from aave earlier
-        (,uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(alice);
+        (, uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(alice);
         console.log("Total debt base: ", totalDebtBase);
         console.log("This contract's usdc balance before repay: ", usdc.balanceOf(address(this)));
         uint256 amountBorrowed = 142 * 1e15;
@@ -84,22 +84,21 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
             alice
         );
         console.log("Final amount repaid: %d", finalAmountRepaid);
-        (uint256 totalCollateralBase, uint256 totalDebtBaseAfter,,,,) = aavePool.getUserAccountData(alice);
+        (uint256 totalCollateralBase,,,,,) = aavePool.getUserAccountData(alice);
         console.log("Total collateral after: %d", totalCollateralBase);
-        console.log("Total debt base after: %d", totalDebtBaseAfter);
 
         // - withdraw $1000 usdc which was put as collateral initially
-        // Hardcoded the aToken address for USDC - 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c
-        uint256 aliceBalance = IERC20(ATOKEN_USDC_ADDRESS).balanceOf(alice);
-        IERC20(ATOKEN_USDC_ADDRESS).transferFrom(alice, address(this), aliceBalance);
-        uint256 withdrawnAmount = aavePool.withdraw(address(usdc), totalCollateralBase / 10**2, alice);
+        uint256 aliceATokenBalance = IERC20(ATOKEN_USDC_ADDRESS).balanceOf(alice);
+        IERC20(ATOKEN_USDC_ADDRESS).transferFrom(alice, address(this), aliceATokenBalance);
+        uint256 withdrawnAmount = aavePool.withdraw(address(usdc), totalCollateralBase / 10 ** 2, alice);
         console.log("Withdrawn collateral amount:", withdrawnAmount);
         console.log("Alice's usdc balance after withdrawal: ", usdc.balanceOf(alice));
 
         // - repay flashloan $500 usdc + flashloanFee to aave
         uint256 totalAmountToRepay = amount + premium;
-        usdc.transferFrom(alice, address(this), totalAmountToRepay);
+        usdc.transferFrom(alice, address(this), premium);
         usdc.approve(address(aavePool), totalAmountToRepay);
+
         return true;
     }
 
@@ -111,4 +110,5 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
     function POOL() external view override returns (IPool) {
         return aavePool;
     }
+
 }
