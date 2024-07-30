@@ -67,10 +67,9 @@ contract DefiPositionsTest is Test {
         // deal(bob, 1 * 1e18);
     }
 
-    // (TODO: IMPORTANT) Check if reetrancy needs to be put due to arbitrary ERC20 tokens
-    // (TODO: IMPORTANT) Check if the function is following CEI pattern
+    // (TODO: IMPORTANT) Put reentrancy guard for arbitrary ERC20 tokens
     // (TODO: IMPORTANT) Check for the specific assets that can be deposited in the pool | Handle cases which can't be deposited
-    function testLeveragedLong() external returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
+    function testLeveraged() external returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
         // Check if assetLong or assetShort is ETH address (TODO: IMPORTANT)
         // Put checks if the asset addresses are valid or check if the pool exists for these assets
         address assetLong = address(weth); // To short weth, assetLong would become usdc and assetShort would become weth
@@ -107,25 +106,22 @@ contract DefiPositionsTest is Test {
 
         // 3. Swap the borrowed assetShort to assetLong
         IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
-        uint256 amountOutMinimum = 0; // TODO: Set the minimum amountOut
+        uint256 amountOutMinimum = quoter.quoteExactInputSingle(assetShort, assetLong, 3000, amountToBorrow, 0);
+        console.log("Amount out minimum: ", amountOutMinimum);
         uint160 sqrtPriceLimitX96 = 0; // TODO: Set the sqrtPriceLimitX96
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: assetShort,
             tokenOut: assetLong,
             fee: 3000,
-            recipient: alice,
+            recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum,
+            amountOutMinimum: amountOutMinimum, // 1% slippage
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
 
         // 4. Deposit the assetLong in the pool (would require permitV, permitR, permitS)
-        vm.prank(alice);
-        IERC20(assetLong).approve(address(this), amountOut);
-
-        IERC20(assetLong).safeTransferFrom(alice, address(this), amountOut);
         IERC20(assetLong).approve(address(aavePool), amountOut);
         aavePool.supply(assetLong, amountOut, alice, 0);
 
@@ -171,9 +167,9 @@ contract DefiPositionsTest is Test {
 
         // 3. Swap the borrowed assetShort to assetLong
         IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
-        uint256 amountOutMinimum = 0;
-        uint160 sqrtPriceLimitX96 = 0;
         address assetLong = address(weth);
+        uint256 amountOutMinimum = quoter.quoteExactInputSingle(assetShort, assetLong, 3000, amountToBorrow, 0);
+        uint160 sqrtPriceLimitX96 = 0;
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: assetShort,
             tokenOut: assetLong,
@@ -202,6 +198,7 @@ contract DefiPositionsTest is Test {
         // Put checks if the asset addresses are valid or check if the pool exists for these assets
         // Put checks if the assetShort addresses are valid or check if the pool exists for these assets
         address assetLong = address(usdc);
+        address assetShort = address(weth);
         uint256 amount = 1000 * 1e6;
 
         vm.prank(alice);
@@ -221,20 +218,19 @@ contract DefiPositionsTest is Test {
 
         // 2. Borrow the assetShort 75% of the user's collateral
         // Get the amount to borrow in the assetShort equivalent
-        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**18) / (100 * priceOracle.getAssetPrice(address(weth)));
+        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**18) / (100 * priceOracle.getAssetPrice(assetShort));
         console.log("Amount to borrow: ", amountToBorrow);
         
         vm.prank(alice); // Approve the creditDelegationToken(for ETH) to spend the amountToBorrow of assetShort
         ICreditDelegationToken(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE).approveDelegation(address(this), amountToBorrow);
-        aavePool.borrow(address(weth), amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
+        aavePool.borrow(assetShort, amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
         console.log("Amount could be borrowed successfully.");
 
         // 3. Swap the borrowed assetShort to assetLong
-
-        uint256 amountOutMinimum = 0;
+        uint256 amountOutMinimum = quoter.quoteExactInputSingle(assetShort, assetLong, 3000, amountToBorrow, 0);
         uint160 sqrtPriceLimitX96 = 0;
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
+            tokenIn: assetShort,
             tokenOut: assetLong,
             fee: 3000,
             recipient: address(this),
