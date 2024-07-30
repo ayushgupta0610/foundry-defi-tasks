@@ -60,9 +60,9 @@ contract DefiPositionsTest is Test {
 
         // Fund the accounts with 1m weth and usdc
         deal(address(weth), alice, 100 * 1e18, false);
-        // deal(address(weth), address(this), 100 * 1e18, false);
+        deal(address(usdc), alice, 1_000_000 * 1e6, true);
 
-        // Fund the accounts with 100 eth
+        // Fund the accounts with 1 eth
         deal(alice, 1 * 1e18);
         // deal(bob, 1 * 1e18);
     }
@@ -71,10 +71,10 @@ contract DefiPositionsTest is Test {
     // (TODO: IMPORTANT) Check if the function is following CEI pattern
     // (TODO: IMPORTANT) Check for the specific assets that can be deposited in the pool | Handle cases which can't be deposited
     function testLeveragedLong() external returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
-        // Check if assetLong or asset is ETH address (TODO: IMPORTANT)
+        // Check if assetLong or assetShort is ETH address (TODO: IMPORTANT)
         // Put checks if the asset addresses are valid or check if the pool exists for these assets
-        address assetLong = address(weth);
-        address asset = address(usdc);
+        address assetLong = address(weth); // To short weth, assetLong would become usdc and assetShort would become weth
+        address assetShort = address(usdc);
         uint256 amount = 1 * 1e18;
 
         // TODO: Has to be done outside the contract (approving this contract to spend the user's asset)
@@ -86,7 +86,7 @@ contract DefiPositionsTest is Test {
         IERC20(assetLong).approve(address(aavePool), amount);
         aavePool.supply(assetLong, amount, alice, 0);
 
-        // Get user balance of asset in the pool
+        // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
             aavePool.getUserAccountData(alice);
         console.log("Total collateral: ", totalCollateralBase);
@@ -94,23 +94,23 @@ contract DefiPositionsTest is Test {
         console.log("Available borrows: ", availableBorrowsBase);
 
         // 2. Borrow the asset 75% of the user's collateral
-        uint8 assetDecimal = ERC20(asset).decimals();
-        // Get the amount to borrow in the asset equivalent
-        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * priceOracle.getAssetPrice(asset));
+        uint8 assetDecimal = ERC20(assetShort).decimals();
+        // Get the amount to borrow in the assetShort equivalent
+        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * priceOracle.getAssetPrice(assetShort));
         console.log("Amount to borrow: ", amountToBorrow);
 
         // TODO: How to get the creditDelegationToken address? (from IPoolAddressesProvider[0x2f39d218133afab8f2b819b1066c7e434ad94e9e])
         vm.prank(alice);
         ICreditDelegationToken(0x72E95b8931767C79bA4EeE721354d6E99a61D004).approveDelegation(address(this), amountToBorrow);
-        aavePool.borrow(asset, amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
+        aavePool.borrow(assetShort, amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of assetShort is with this contract
         console.log("Amount could be borrowed successfully.");
 
-        // 3. Swap the borrowed asset to assetLong
-        IERC20(asset).approve(address(swapRouter), amountToBorrow);
+        // 3. Swap the borrowed assetShort to assetLong
+        IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
         uint256 amountOutMinimum = 0; // TODO: Set the minimum amountOut
         uint160 sqrtPriceLimitX96 = 0; // TODO: Set the sqrtPriceLimitX96
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: asset,
+            tokenIn: assetShort,
             tokenOut: assetLong,
             fee: 3000,
             recipient: alice,
@@ -137,8 +137,8 @@ contract DefiPositionsTest is Test {
     }
 
     function testLeveragedLongETH() external payable returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
-        // Put checks if the asset addresses are valid or check if the pool exists for these assets
-        address asset = address(usdc);
+        // Put checks if the assetShort addresses are valid or check if the pool exists for these assets
+        address assetShort = address(usdc);
         uint256 amount = 1 * 1e18;
 
         // vm.prank(alice);
@@ -150,32 +150,32 @@ contract DefiPositionsTest is Test {
         wrappedTokenGateway.depositETH{value: amount}(address(aavePool), alice, 0);
 
 
-        // Get user balance of asset in the pool
+        // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
             aavePool.getUserAccountData(alice);
         console.log("Total collateral: ", totalCollateralBase);
         console.log("Total debt: ", totalDebtBase);
         console.log("Available borrows: ", availableBorrowsBase);
 
-        // 2. Borrow the asset 75% of the user's collateral
-        uint8 assetDecimal = ERC20(asset).decimals();
-        // Get the amount to borrow in the asset equivalent
-        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * priceOracle.getAssetPrice(asset));
+        // 2. Borrow the assetShort 75% of the user's collateral
+        uint8 assetDecimal = ERC20(assetShort).decimals();
+        // Get the amount to borrow in the assetShort equivalent
+        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * priceOracle.getAssetPrice(assetShort));
         console.log("Amount to borrow: ", amountToBorrow);
 
         
         vm.prank(alice);
         ICreditDelegationToken(0x72E95b8931767C79bA4EeE721354d6E99a61D004).approveDelegation(address(this), amountToBorrow);
-        aavePool.borrow(asset, amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
+        aavePool.borrow(assetShort, amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
         console.log("Amount could be borrowed successfully.");
 
-        // 3. Swap the borrowed asset to assetLong
-        IERC20(asset).approve(address(swapRouter), amountToBorrow);
+        // 3. Swap the borrowed assetShort to assetLong
+        IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
         uint256 amountOutMinimum = 0;
         uint160 sqrtPriceLimitX96 = 0;
         address assetLong = address(weth);
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: asset,
+            tokenIn: assetShort,
             tokenOut: assetLong,
             fee: 3000,
             recipient: address(this),
@@ -197,12 +197,66 @@ contract DefiPositionsTest is Test {
         console.log("Available borrows: ", availableBorrowsBase);
     }
     
-    function testLeveragedShort(address assetShort, address asset, uint256 amount) external {
+    function testLeveragedShortETH() external returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
         // Implement the leveraged short strategy
-        // Check if assetLong or asset is ETH address
         // Put checks if the asset addresses are valid or check if the pool exists for these assets
+        // Put checks if the assetShort addresses are valid or check if the pool exists for these assets
+        address assetLong = address(usdc);
+        uint256 amount = 1000 * 1e6;
+
+        vm.prank(alice);
+        IERC20(assetLong).approve(address(this), amount);
+        IERC20(assetLong).safeTransferFrom(alice, address(this), amount);
+
+       // 1. Deposit the assetLong in the pool
+        IERC20(assetLong).approve(address(aavePool), amount);
+        aavePool.supply(assetLong, amount, alice, 0);
+
+        // Get user balance of assetShort in the pool
+        (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
+            aavePool.getUserAccountData(alice);
+        console.log("Total collateral: ", totalCollateralBase);
+        console.log("Total debt: ", totalDebtBase);
+        console.log("Available borrows: ", availableBorrowsBase);
+
+        // 2. Borrow the assetShort 75% of the user's collateral
+        // Get the amount to borrow in the assetShort equivalent
+        uint256 amountToBorrow = (totalCollateralBase * 75 * 10**18) / (100 * priceOracle.getAssetPrice(address(weth)));
+        console.log("Amount to borrow: ", amountToBorrow);
+        
+        vm.prank(alice); // Approve the creditDelegationToken(for ETH) to spend the amountToBorrow of assetShort
+        ICreditDelegationToken(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE).approveDelegation(address(this), amountToBorrow);
+        aavePool.borrow(address(weth), amountToBorrow, 2, 0, alice); // The 'amountToBorrow' amount of asset is with this contract
+        console.log("Amount could be borrowed successfully.");
+
+        // 3. Swap the borrowed assetShort to assetLong
+
+        uint256 amountOutMinimum = 0;
+        uint160 sqrtPriceLimitX96 = 0;
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(weth),
+            tokenOut: assetLong,
+            fee: 3000,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountToBorrow,
+            amountOutMinimum: amountOutMinimum,
+            sqrtPriceLimitX96: sqrtPriceLimitX96
+        });
+        uint256 amountOut = swapRouter.exactInputSingle{value: amountToBorrow}(params);
+
+        // 4. Deposit the assetLong in the pool (would require permitV, permitR, permitS)
+        IERC20(assetLong).approve(address(aavePool), amountOut);
+        aavePool.supply(assetLong, amountOut, alice, 0);
+
+        // 5. Check the users total collateral and total debt in the pool
+        (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(alice);
+        console.log("Total collateral: ", totalCollateralBase);
+        console.log("Total debt: ", totalDebtBase);
+        console.log("Available borrows: ", availableBorrowsBase);
     }
 
+    // Required because of IWETH9.withdraw() function
     fallback() external payable {}
 
 }
