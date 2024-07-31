@@ -19,3 +19,5 @@ The repo consists of the below Defi tasks:
   - Withdraw $1000 USDC
   - Repay flash loan of $500 USDC + premium to Aave 
   - Deposit remaining about $500 USDC into compound - pending (This and supply in first task pending => 1000 USDC with the user) 
+
+- Fourth task on Ethereum - Long or Short strategies for ETH / WETH on Aave v3 (OnChainLeverageTest.t.sol)
