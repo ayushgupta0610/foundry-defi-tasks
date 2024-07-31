@@ -11,7 +11,7 @@ import {IQuoter} from "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {IVariableDebtToken} from "@aave/v3-core/contracts/interfaces/IVariableDebtToken.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
-import {CometMainInterface} from "./interfaces/CometMainInterface.sol";
+import {CometMainInterface} from "../src/ethereum/rareskills/interfaces/CometMainInterface.sol";
 
 contract DefiEthereumTest is Test {
     uint256 private constant ORACLE_PRECISION = 1e8;
@@ -197,4 +197,5 @@ contract DefiEthereumTest is Test {
         // Check if the user's USDC balance has decreased by 500
         assertEq(aliceUsdcBalanceBefore - aliceUsdcBalanceAfter, supplyAmount);
     }
+
 }

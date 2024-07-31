@@ -13,7 +13,7 @@ import {IVariableDebtToken} from "@aave/v3-core/contracts/interfaces/IVariableDe
 import {IFlashLoanSimpleReceiver} from "@aave/v3-core/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IPoolAddressesProvider} from "@aave/v3-core/contracts/interfaces/IPoolAddressesProvider.sol";
 import {FlashLoanContract, NetworkConfig} from "../src/ethereum/FlashLoanContract.sol";
-import {CometMainInterface} from "./interfaces/CometMainInterface.sol";
+import {CometMainInterface} from "../src/ethereum/rareskills/interfaces/CometMainInterface.sol";
 import {DataTypes} from "@aave/v3-core/contracts/protocol/libraries/types/DataTypes.sol";
 
 contract DefiEthereumTest is Test {
