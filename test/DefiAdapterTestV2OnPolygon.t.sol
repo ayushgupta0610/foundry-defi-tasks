@@ -46,8 +46,8 @@ contract DefiAdapterTest is Test {
         deal(address(usdc), bob, 1e6 * 1e6, true);
 
         // Fund the accounts with 100 weth
-        deal(address(weth), alice, 100 * 1e18, true);
-        deal(address(weth), bob, 100 * 1e18, true);
+        deal(address(weth), alice, 100 * 1e18, false);
+        deal(address(weth), bob, 100 * 1e18, false);
     }
 
     function testAaveDeposit() external {

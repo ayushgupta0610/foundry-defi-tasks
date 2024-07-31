@@ -23,6 +23,12 @@ contract OnChainLeverageTest is Test {
         // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
         (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress) = testConfigEthereum.activeNetworkConfig();
+        
+        usdc = ERC20(usdcAddress);
+        weth = ERC20(wethAddress);
+        priceOracle = IPriceOracleGetter(aavePriceOracleAddress);
+
+        // Deploy OnChainLeverage contract
         OnChainLeverage.NetworkConfig memory activeNetwork = OnChainLeverage.NetworkConfig({
             usdcAddress: usdcAddress,
             wethAddress: wethAddress,
@@ -34,11 +40,6 @@ contract OnChainLeverageTest is Test {
             swapRouterAddress: swapRouterAddress,
             cometAddress: cometAddress
         });
-        usdc = ERC20(activeNetwork.usdcAddress);
-        weth = ERC20(activeNetwork.wethAddress);
-        priceOracle = IPriceOracleGetter(activeNetwork.aavePriceOracleAddress);
-
-        // Deploy the contract
         onChainLeverage = new OnChainLeverage(activeNetwork);
     }
 
@@ -63,10 +64,10 @@ contract OnChainLeverageTest is Test {
         deal(address(weth), alice, amount, false);
 
         vm.startPrank(alice);
-        // This should be essentially the 'amount' of usdc after exactInputSingle swap of 'amount' value of eth
+        // The below uint256 value should be essentially the 'amount' of usdc after exactInputSingle swap of 'amount' value of eth
         weth.approve(address(onChainLeverage), type(uint256).max);
         ICreditDelegationToken(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE).approveDelegation(address(onChainLeverage), type(uint256).max);
-        (uint256 totalCollateralBase,,) = onChainLeverage.shortWethOnAave(address(usdc), amount);
+        (uint256 totalCollateralBase,,) = onChainLeverage.shortOnAave(address(weth), address(usdc), amount);
         vm.stopPrank();
         uint8 usdcDecimal = usdc.decimals();
         uint256 usdcPrice = priceOracle.getAssetPrice(address(usdc));

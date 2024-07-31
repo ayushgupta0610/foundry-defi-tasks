@@ -15,13 +15,11 @@ import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICredit
 import {IPoolDataProvider} from "@aave/v3-core/contracts/interfaces/IPoolDataProvider.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-// TODO: Amount can be removed as a param in the case of eth short and long
+
 contract OnChainLeverage is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    error OnChainLeverage__InvalidAssetAddress();
     error OnChainLeverage__InsufficientAssetProvided();
-    error OnChainLeverage__TransferFailed();
 
     struct NetworkConfig {
         address usdcAddress;
@@ -36,8 +34,8 @@ contract OnChainLeverage is ReentrancyGuard {
     } 
 
     uint24 private constant UNISWAP_FEE = 3000;
+    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    IERC20 private usdc;
     IERC20 private weth;
     IPool private aavePool;
     IWrappedTokenGatewayV3 private wrappedTokenGateway;
@@ -47,10 +45,13 @@ contract OnChainLeverage is ReentrancyGuard {
     ICreditDelegationToken private creditDelegationToken;
     CometMainInterface private comet;
 
-    // TODO: Declare some events here and emit them at state changes
+    event Deposit(address indexed user, address indexed asset, uint256 amount);
+    event Borrow(address indexed user, address indexed asset, uint256 amount);
+    event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
+    event Withdraw(address indexed user, address indexed asset, uint256 amount);
+
 
     constructor(NetworkConfig memory activeNetwork) {
-        usdc = IERC20(activeNetwork.usdcAddress);
         weth = IERC20(activeNetwork.wethAddress);
         aavePool = IPool(activeNetwork.aavePoolAddress);
         wrappedTokenGateway = IWrappedTokenGatewayV3(activeNetwork.wrappedTokenGatewayAddress);
@@ -60,15 +61,17 @@ contract OnChainLeverage is ReentrancyGuard {
         comet = CometMainInterface(activeNetwork.cometAddress);
     } 
 
-    // (TODO: IMPORTANT) Check for the specific assets that can be deposited in the pool | Handle cases which can't be deposited
-    // TODO: Return assets wherever remaining
-    function longOnAave(address assetLong, address assetShort, uint256 amountLong) external nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
-        // Check if assetLong is ETH address (TODO: IMPORTANT) and accordingly switch between the below two functions
+    // (TODO: IMPORTANT) Check for the specific assets that can be deposited in the aave pool | Handle cases which can't be deposited
+    function longOnAave(address assetLong, address assetShort, uint256 amountLong) external payable nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
+        if (assetLong == ETH_ADDRESS) {
+            return longEthOnAave(assetShort, amountLong);
+        }
 
         IERC20(assetLong).safeTransferFrom(msg.sender, address(this), amountLong);
         // 1. Deposit the assetLong in the pool
         IERC20(assetLong).approve(address(aavePool), type(uint256).max);
         aavePool.supply(assetLong, amountLong, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amountLong);
 
         // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
@@ -79,12 +82,12 @@ contract OnChainLeverage is ReentrancyGuard {
         // Get the amount to borrow in the assetShort equivalent
         uint256 assetShortPrice = priceOracle.getAssetPrice(assetShort);
         uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * assetShortPrice);
-
         aavePool.borrow(assetShort, amountToBorrow, 2, 0, msg.sender); // The 'amountToBorrow' amount of assetShort is with this contract
+        emit Borrow(msg.sender, assetShort, amountToBorrow);
 
         // 3. Swap the borrowed assetShort to assetLong
         IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
-        uint160 sqrtPriceLimitX96 = 0; // TODO: Set the sqrtPriceLimitX96
+        uint160 sqrtPriceLimitX96 = 0; // TODO: Set the sqrtPriceLimitX96 variables in all the functions
         uint256 amountOutMinimum = quoter.quoteExactInputSingle(assetShort, assetLong, UNISWAP_FEE, amountToBorrow, sqrtPriceLimitX96);
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: assetShort,
@@ -97,22 +100,24 @@ contract OnChainLeverage is ReentrancyGuard {
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
+        emit Swap(msg.sender, assetShort, assetLong, amountToBorrow, amountOut);
 
         // 4. Deposit the assetLong in the pool
         // IERC20(assetLong).approve(address(aavePool), amountOut);
         aavePool.supply(assetLong, amountOut, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amountOut);
 
         // 5. Check the users total collateral and total debt in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(msg.sender);
     }
 
     function longEthOnAave(address assetShort, uint256 amountLong) public payable nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
-        require(msg.value == amountLong, "Amount should be equal to the value sent");
         if (msg.value != amountLong) {
             revert OnChainLeverage__InsufficientAssetProvided();
         }
         // 1. Deposit the assetLong in the pool
         wrappedTokenGateway.depositETH{value: amountLong}(address(aavePool), msg.sender, 0);
+        emit Deposit(msg.sender, ETH_ADDRESS, amountLong);
 
         // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
@@ -125,6 +130,7 @@ contract OnChainLeverage is ReentrancyGuard {
         uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * assetShortPrice);
 
         aavePool.borrow(assetShort, amountToBorrow, 2, 0, msg.sender); // The 'amountToBorrow' amount of asset is with this contract
+        emit Borrow(msg.sender, assetShort, amountToBorrow);
 
         // 3. Swap the borrowed assetShort to weth
         IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
@@ -142,18 +148,23 @@ contract OnChainLeverage is ReentrancyGuard {
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
+        emit Swap(msg.sender, assetShort, ETH_ADDRESS, amountToBorrow, amountOut);
         IWETH9(assetLong).withdraw(amountOut);
 
         // 4. Deposit the assetLong in the pool
         wrappedTokenGateway.depositETH{value: amountOut}(address(aavePool), msg.sender, 0);
+        emit Deposit(msg.sender, ETH_ADDRESS, amountOut);
 
         // 5. Check the users total collateral and total debt in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(msg.sender);
     }
 
-    function shortWethOnAave(address assetLong, uint256 amountShort) public nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
-        // 1. Swap WETH to assetLong
-        address assetShort = address(weth);
+    function shortOnAave(address assetShort, address assetLong, uint256 amountShort) external payable nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
+        if (assetShort == ETH_ADDRESS) {
+            return shortEthOnAave(assetLong, amountShort);
+        }
+
+        // 1. Swap assetShort to assetLong
         IERC20(assetShort).safeTransferFrom(msg.sender, address(this), amountShort);
         IERC20(assetShort).approve(address(swapRouter), type(uint256).max);
         // uint160 firstSqrtPriceLimitX96 = 0;
@@ -169,10 +180,12 @@ contract OnChainLeverage is ReentrancyGuard {
             sqrtPriceLimitX96: 0
         });
         uint256 amount = swapRouter.exactInputSingle(firstParams);
+        emit Swap(msg.sender, assetShort, assetLong, amountShort, amount);
 
         // 2. Deposit the assetLong in the pool
         IERC20(assetLong).approve(address(aavePool), type(uint256).max);
         aavePool.supply(assetLong, amount, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amount);
 
         // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
@@ -182,6 +195,7 @@ contract OnChainLeverage is ReentrancyGuard {
         uint256 amountToBorrow = (totalCollateralBase * 75 * 10**18) / (100 * priceOracle.getAssetPrice(assetShort));
         
         aavePool.borrow(assetShort, amountToBorrow, 2, 0, msg.sender); // The 'amountToBorrow' amount of asset is with this contract
+        emit Borrow(msg.sender, assetShort, amountToBorrow);
 
         // 4. Swap the borrowed assetShort to assetLong
         uint160 sqrtPriceLimitX96 = 0;
@@ -198,10 +212,12 @@ contract OnChainLeverage is ReentrancyGuard {
         });
         // IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
         uint256 amountOut = swapRouter.exactInputSingle(params);
+        emit Swap(msg.sender, assetShort, assetLong, amountToBorrow, amountOut);
 
         // 5. Deposit the assetLong in the pool
         // IERC20(assetLong).approve(address(aavePool), amountOut);
         aavePool.supply(assetLong, amountOut, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amountOut);
 
         // 6. Check the users total collateral and total debt in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(msg.sender);
@@ -226,10 +242,12 @@ contract OnChainLeverage is ReentrancyGuard {
             sqrtPriceLimitX96: 0
         });
         uint256 amount = swapRouter.exactInputSingle{value: amountShort}(firstParams);
+        emit Swap(msg.sender, ETH_ADDRESS, assetLong, amountShort, amount);
 
         // 2. Deposit the assetLong in the pool
         IERC20(assetLong).approve(address(aavePool), type(uint256).max);
         aavePool.supply(assetLong, amount, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amount);
 
         // Get user balance of assetShort in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) =
@@ -239,6 +257,7 @@ contract OnChainLeverage is ReentrancyGuard {
         uint256 amountToBorrow = (totalCollateralBase * 75 * 10**18) / (100 * priceOracle.getAssetPrice(assetShort));
         
         aavePool.borrow(assetShort, amountToBorrow, 2, 0, msg.sender); // The 'amountToBorrow' amount of asset is with this contract
+        emit Borrow(msg.sender, ETH_ADDRESS, amountToBorrow);
         IWETH9(assetShort).withdraw(amountToBorrow);
 
         // 4. Swap the borrowed assetShort to assetLong
@@ -255,10 +274,12 @@ contract OnChainLeverage is ReentrancyGuard {
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle{value: amountToBorrow}(params);
+        emit Swap(msg.sender, ETH_ADDRESS, assetLong, amountToBorrow, amountOut);
 
         // 5. Deposit the assetLong in the pool
         // IERC20(assetLong).approve(address(aavePool), amountOut);
         aavePool.supply(assetLong, amountOut, msg.sender, 0);
+        emit Deposit(msg.sender, assetLong, amountOut);
 
         // 6. Check the users total collateral and total debt in the pool
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(msg.sender);
