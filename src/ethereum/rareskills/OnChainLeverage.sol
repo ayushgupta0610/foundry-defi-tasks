@@ -61,7 +61,6 @@ contract OnChainLeverage is ReentrancyGuard {
         comet = CometMainInterface(activeNetwork.cometAddress);
     } 
 
-    // (TODO: IMPORTANT) Check for the specific assets that can be deposited in the aave pool | Handle cases which can't be deposited
     function longOnAave(address assetLong, address assetShort, uint256 amountLong) external payable nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
         if (assetLong == ETH_ADDRESS) {
             return longEthOnAave(assetShort, amountLong);
@@ -96,7 +95,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: amountOutMinimum, // Ask Jeffrey: Should I add a scope of slippage here?
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
