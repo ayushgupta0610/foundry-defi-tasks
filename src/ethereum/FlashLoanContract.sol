@@ -23,6 +23,7 @@ struct NetworkConfig {
     address quoterAddress;
     address swapRouterAddress;
     address cometAddress;
+    address positionManagerAddress;
 }
 
 contract FlashLoanContract is IFlashLoanSimpleReceiver {

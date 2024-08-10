@@ -11,6 +11,9 @@ import {IPriceOracleGetter} from "@aave/v3-core/contracts/interfaces/IPriceOracl
 contract OnChainLeverageTest is Test {
 
     address immutable alice = makeAddr("Alice");
+    address constant AUSDC_VARIABLE_DEBT_TOKEN = 0x72E95b8931767C79bA4EeE721354d6E99a61D004;
+    address constant AWETH_VARIABLE_DEBT_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
+
 
     ERC20 private usdc;
     ERC20 private weth;
@@ -22,7 +25,7 @@ contract OnChainLeverageTest is Test {
         vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/<ALCHEMY_API_KEY>", 20420407);
         // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
-        (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress) = testConfigEthereum.activeNetworkConfig();
+        (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress, address positionManagerAddress) = testConfigEthereum.activeNetworkConfig();
         
         usdc = ERC20(usdcAddress);
         weth = ERC20(wethAddress);
@@ -38,7 +41,8 @@ contract OnChainLeverageTest is Test {
             aavePriceOracleAddress: aavePriceOracleAddress,
             quoterAddress: quoterAddress,
             swapRouterAddress: swapRouterAddress,
-            cometAddress: cometAddress
+            cometAddress: cometAddress,
+            positionManagerAddress: positionManagerAddress
         });
         onChainLeverage = new OnChainLeverage(activeNetwork);
     }
@@ -49,7 +53,7 @@ contract OnChainLeverageTest is Test {
 
         vm.startPrank(alice);
         weth.approve(address(onChainLeverage), amount);
-        ICreditDelegationToken(0x72E95b8931767C79bA4EeE721354d6E99a61D004).approveDelegation(address(onChainLeverage), type(uint256).max);
+        ICreditDelegationToken(AUSDC_VARIABLE_DEBT_TOKEN).approveDelegation(address(onChainLeverage), type(uint256).max);
         (uint256 totalCollateralBase,,) = onChainLeverage.longOnAave(address(weth), address(usdc), amount);
         vm.stopPrank();
         // Convert the totalCollateralBase amount to weth
@@ -66,7 +70,7 @@ contract OnChainLeverageTest is Test {
         vm.startPrank(alice);
         // The below uint256 value should be essentially the 'amount' of usdc after exactInputSingle swap of 'amount' value of eth
         weth.approve(address(onChainLeverage), type(uint256).max);
-        ICreditDelegationToken(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE).approveDelegation(address(onChainLeverage), type(uint256).max);
+        ICreditDelegationToken(AWETH_VARIABLE_DEBT_TOKEN).approveDelegation(address(onChainLeverage), type(uint256).max);
         (uint256 totalCollateralBase,,) = onChainLeverage.shortOnAave(address(weth), address(usdc), amount);
         vm.stopPrank();
         uint8 usdcDecimal = usdc.decimals();
@@ -87,7 +91,7 @@ contract OnChainLeverageTest is Test {
         vm.startPrank(alice);
         weth.approve(address(onChainLeverage), amount);
         // TODO: Get the ICreditDelegationToken address and ICreditDelegationToken (from IPoolAddressesProvider[0x2f39d218133afab8f2b819b1066c7e434ad94e9e])
-        ICreditDelegationToken(0x72E95b8931767C79bA4EeE721354d6E99a61D004).approveDelegation(address(onChainLeverage), type(uint256).max);
+        ICreditDelegationToken(AUSDC_VARIABLE_DEBT_TOKEN).approveDelegation(address(onChainLeverage), type(uint256).max);
         (uint256 totalCollateralBase,,) = onChainLeverage.longEthOnAave{value: amount}(address(usdc), amount);
         vm.stopPrank();
         // Convert the totalCollateralBase amount to weth
@@ -104,7 +108,7 @@ contract OnChainLeverageTest is Test {
         vm.startPrank(alice);
         // This should be essentially the 'amount' of usdc after exactInputSingle swap of 'amount' value of eth
         usdc.approve(address(onChainLeverage), type(uint256).max);
-        ICreditDelegationToken(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE).approveDelegation(address(onChainLeverage), type(uint256).max);
+        ICreditDelegationToken(AWETH_VARIABLE_DEBT_TOKEN).approveDelegation(address(onChainLeverage), type(uint256).max);
         (uint256 totalCollateralBase,,) = onChainLeverage.shortEthOnAave{value: amount}(address(usdc), amount);
         vm.stopPrank();
         uint8 usdcDecimal = usdc.decimals();

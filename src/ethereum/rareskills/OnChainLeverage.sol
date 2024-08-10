@@ -31,10 +31,11 @@ contract OnChainLeverage is ReentrancyGuard {
         address quoterAddress;
         address swapRouterAddress;
         address cometAddress;
+        address positionManagerAddress;
     } 
 
     uint24 private constant UNISWAP_FEE = 3000;
-    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // Jeffrey: Not a recommended practice
 
     IERC20 private weth;
     IPool private aavePool;
@@ -49,7 +50,6 @@ contract OnChainLeverage is ReentrancyGuard {
     event Borrow(address indexed user, address indexed asset, uint256 amount);
     event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
     event Withdraw(address indexed user, address indexed asset, uint256 amount);
-
 
     constructor(NetworkConfig memory activeNetwork) {
         weth = IERC20(activeNetwork.wethAddress);
@@ -80,10 +80,12 @@ contract OnChainLeverage is ReentrancyGuard {
         uint8 assetDecimal = ERC20(assetShort).decimals();
         // Get the amount to borrow in the assetShort equivalent
         uint256 assetShortPrice = priceOracle.getAssetPrice(assetShort);
+        // Jeffrey: Instead of hardcoding 75, the value should be retrieved via ltv (aave v3)
         uint256 amountToBorrow = (totalCollateralBase * 75 * 10**assetDecimal) / (100 * assetShortPrice);
         aavePool.borrow(assetShort, amountToBorrow, 2, 0, msg.sender); // The 'amountToBorrow' amount of assetShort is with this contract
         emit Borrow(msg.sender, assetShort, amountToBorrow);
 
+        // Jeffrey: This entire code can be extracted out in a separate function and should return the optimal amountOut for the swap
         // 3. Swap the borrowed assetShort to assetLong
         IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
         uint160 sqrtPriceLimitX96 = 0; // TODO: Set the sqrtPriceLimitX96 variables in all the functions
@@ -93,9 +95,9 @@ contract OnChainLeverage is ReentrancyGuard {
             tokenOut: assetLong,
             fee: UNISWAP_FEE,
             recipient: address(this),
-            deadline: block.timestamp,
+            deadline: block.timestamp, // Jeffrey: This should be passed as a parameter
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum, // Ask Jeffrey: Should I add a scope of slippage here?
+            amountOutMinimum: amountOutMinimum, // Jeffrey: This should be calculated off chain and passed as a parameter
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
@@ -110,6 +112,7 @@ contract OnChainLeverage is ReentrancyGuard {
         (totalCollateralBase, totalDebtBase, availableBorrowsBase,,,) = aavePool.getUserAccountData(msg.sender);
     }
 
+    // Jeffrey: This and in the shortEthOnAave function, the amount param can be removed and msg.value can be used directly
     function longEthOnAave(address assetShort, uint256 amountLong) public payable nonReentrant returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase) {
         if (msg.value != amountLong) {
             revert OnChainLeverage__InsufficientAssetProvided();
@@ -143,7 +146,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: amountOutMinimum,
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle(params);
@@ -175,7 +178,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountShort,
-            amountOutMinimum: firstAmountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: firstAmountOutMinimum,
             sqrtPriceLimitX96: 0
         });
         uint256 amount = swapRouter.exactInputSingle(firstParams);
@@ -206,7 +209,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: amountOutMinimum,
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         // IERC20(assetShort).approve(address(swapRouter), amountToBorrow);
@@ -237,7 +240,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountShort,
-            amountOutMinimum: firstAmountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: firstAmountOutMinimum,
             sqrtPriceLimitX96: 0
         });
         uint256 amount = swapRouter.exactInputSingle{value: amountShort}(firstParams);
@@ -269,7 +272,7 @@ contract OnChainLeverage is ReentrancyGuard {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: amountToBorrow,
-            amountOutMinimum: amountOutMinimum, // Should I add a scope of slippage here?
+            amountOutMinimum: amountOutMinimum,
             sqrtPriceLimitX96: sqrtPriceLimitX96
         });
         uint256 amountOut = swapRouter.exactInputSingle{value: amountToBorrow}(params);
