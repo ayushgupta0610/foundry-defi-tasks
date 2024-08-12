@@ -15,32 +15,18 @@ import {IWrappedTokenGatewayV3} from "@aave/v3-periphery/contracts/misc/interfac
 import {IPriceOracleGetter} from "@aave/v3-core/contracts/interfaces/IPriceOracleGetter.sol";
 import {IQuoter} from "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol"; 
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import {IVariableDebtToken} from "@aave/v3-core/contracts/interfaces/IVariableDebtToken.sol";
-import {IPoolAddressesProvider} from "@aave/v3-core/contracts/interfaces/IPoolAddressesProvider.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
-import {IPoolDataProvider} from "@aave/v3-core/contracts/interfaces/IPoolDataProvider.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {DataTypes} from "@aave/v3-core/contracts/protocol/libraries/types/DataTypes.sol";
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {NetworkConfig} from "../NetworkConfig.sol";
 
 contract RepayViaLPFees {
     using SafeTransferLib for address;
 
-    error OnChainLeverage__AssetTransferFailed();
-    error OnChainLeverage__InsufficientAssetProvided();
-    error OnChainLeverage__NotEnoughCollateralDeposited();
-
-    struct NetworkConfig {
-        address usdcAddress;
-        address wethAddress;
-        address aavePoolAddress;
-        address wrappedTokenGatewayAddress;
-        address creditDelegationToken;
-        address aavePriceOracleAddress;
-        address quoterAddress;
-        address swapRouterAddress;
-        address cometAddress;
-        address positionManagerAddress;
-    } 
+    error RepayViaLPFees__AssetTransferFailed();
+    error RepayViaLPFees__InsufficientAssetProvided();
+    error RepayViaLPFees__NotEnoughCollateralDeposited();
 
     uint24 private constant UNISWAP_FEE = 3000;
     address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // Jeffrey: Not a recommended practice
@@ -79,8 +65,6 @@ contract RepayViaLPFees {
         emit Deposit(msg.sender, ETH_ADDRESS, msg.value);
     }
 
-    // function to borrow eth from aave
-    // function to swap ausdc back to usdc
     // put eth and usdc as lp position in uniswap
     // pay the debt as LP positions make profit
 
@@ -110,7 +94,7 @@ contract RepayViaLPFees {
         uint256 borrowableAmount = (availableBorrowsBase * (10**decimals)) / wethPrice;
         console.log("Borrowable amount: ", borrowableAmount);
         if (borrowableAmount < amount) {
-            revert OnChainLeverage__NotEnoughCollateralDeposited();
+            revert RepayViaLPFees__NotEnoughCollateralDeposited();
         }
         console.log("Original contract's balance before borrowing: ", address(this).balance);
         // This will require the user to approve the approveDelegation to borrow weth
@@ -155,7 +139,7 @@ contract RepayViaLPFees {
         uint256 deadline
     ) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         if (msg.value != amountWETH) {
-            revert OnChainLeverage__InsufficientAssetProvided();
+            revert RepayViaLPFees__InsufficientAssetProvided();
         }
         // Transfer USDC and WETH to this contract
         address(usdc).safeTransferFrom(msg.sender, address(this), amountUSDC);
@@ -184,22 +168,17 @@ contract RepayViaLPFees {
         // Mint the liquidity position
         (tokenId, liquidity, amount0, amount1) = positionManager.mint{value: amountWETH}(params);
 
-        // Refund any unused tokens
-        if (amountWETH > amount1) {
-            (bool success,) = payable(msg.sender).call{value: amountWETH - amount1}("");
-            if (!success) {
-                revert OnChainLeverage__AssetTransferFailed();
-            }
-        }
         if (amountUSDC > amount0) {
             uint256 remainingUSDC = amountUSDC - amount0;
             address(usdc).safeTransfer(msg.sender, remainingUSDC);
         }
-    }
-
-    function addLiquidityToUniswap() external returns (uint256) {
-        // Add liquidity to uniswap by providing eth and usdc
-        // Get the amount of eth and usdc to be provided
+        // Refund any unused tokens
+        // if (amountWETH > amount1) {
+        //     (bool success,) = payable(msg.sender).call{value: amountWETH - amount1}("");
+        //     if (!success) {
+        //         revert RepayViaLPFees__AssetTransferFailed();
+        //     }
+        // }
     }
 
     // Function to pay the amount coming from LP to repay the debt position on aave based on the profits from Uniswap LP positions
@@ -239,6 +218,8 @@ contract RepayViaLPFees {
         return (tickLower, tickUpper);
     }
 
+
+    // Helper function to encode price as sqrtPriceX96 (TODO: check this function)
     function encodePriceToSqrtPriceX96(uint256 price, uint256 baseTokenDecimals, uint256 quoteTokenDecimals) internal pure returns (uint160) {
         require(price > 0, "Price must be greater than zero");
         uint256 priceQ96 = (price * quoteTokenDecimals * (1 << 96)) / baseTokenDecimals;
@@ -254,6 +235,31 @@ contract RepayViaLPFees {
             y = z;
             z = (x / z + z) / 2;
         }
+    }
+
+    function calculateTick(uint256 price, uint8 decimal0, uint8 decimal1) public pure returns (int24) {
+        require(decimal0 <= 18 && decimal1 <= 18, "Decimals must be <= 18");
+        
+        uint256 adjustedPrice = (price * (10**decimal0)) / (10**decimal1);
+        uint160 sqrtPriceX96 = uint160(sqrt((adjustedPrice << 192) / 1 ether));
+        
+        return TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+    }
+
+    function calculatePriceFromTick(int24 tick, uint8 decimal0, uint8 decimal1) public pure returns (uint256) {
+        require(decimal0 <= 18 && decimal1 <= 18, "Decimals must be <= 18");
+        
+        uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick);
+        uint256 price = FullMath.mulDiv(uint256(sqrtPriceX96) * uint256(sqrtPriceX96), 10**decimal1, 1 << 192);
+        
+        return price / (10**decimal0);
+    }
+
+    function getTickRange(uint256 lowerPrice, uint256 upperPrice, uint8 decimal0, uint8 decimal1) public pure returns (int24, int24) {
+        int24 lowerTick = calculateTick(lowerPrice, decimal0, decimal1);
+        int24 upperTick = calculateTick(upperPrice, decimal0, decimal1);
+        
+        return (lowerTick, upperTick);
     }
 
     // Required because of IWETH9.withdraw() function

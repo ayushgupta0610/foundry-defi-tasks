@@ -11,6 +11,11 @@ import {IPool} from "@aave/v3-core/contracts/interfaces/IPool.sol";
 import {IQuoter} from "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {SafeTransferLib} from "lib/solady/src/utils/SafeTransferLib.sol";
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol"; 
+import {TickMath} from "../src/ethereum/rareskills/libraries/TickMath.sol";
+import {FullMath} from "../src/ethereum/rareskills/libraries/FullMath.sol";
+import {NetworkConfig} from "../src/ethereum/NetworkConfig.sol";
 
 
 contract RepayViaLPFeesTest is Test {
@@ -34,7 +39,8 @@ contract RepayViaLPFeesTest is Test {
     ISwapRouter private swapRouter;
 
     function setUp() public {
-        vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/<ALCHEMY_API_KEY>", 20468085);
+        string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
+        vm.createSelectFork(rpcUrl);
          // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
         (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress, address positionManagerAddress) = testConfigEthereum.activeNetworkConfig();
@@ -44,7 +50,7 @@ contract RepayViaLPFeesTest is Test {
         priceOracle = IPriceOracleGetter(aavePriceOracleAddress);
 
         // Deploy RepayViaLPFees contract
-        RepayViaLPFees.NetworkConfig memory activeNetwork = RepayViaLPFees.NetworkConfig({
+        NetworkConfig memory activeNetwork = NetworkConfig({
             usdcAddress: usdcAddress,
             wethAddress: wethAddress,
             aavePoolAddress: aavePoolAddress,
@@ -60,6 +66,7 @@ contract RepayViaLPFeesTest is Test {
         aavePool = IPool(aavePoolAddress);
         quoter = IQuoter(quoterAddress);
         swapRouter = ISwapRouter(swapRouterAddress);
+
     }
 
     // function to test deposit usdc into aave
@@ -70,8 +77,13 @@ contract RepayViaLPFeesTest is Test {
         usdc.approve(address(repayViaLPFees), usdcAmount);
         repayViaLPFees.depositAssetOnAave(address(usdc), usdcAmount);
         vm.stopPrank();
+        (uint256 totalCollateralBase,,,,,) =
+            aavePool.getUserAccountData(alice);
+        console.log("Total collateral base: ", totalCollateralBase);
+        assertGe(totalCollateralBase, usdcAmount, "User should have deposited usdc");
     }
 
+    // function to test borrow eth from aave
     function testBorrowEthFromAave() public {
         uint256 usdcAmount = 1000 * 1e6;
         deal(address(usdc), alice, usdcAmount, true);
@@ -94,17 +106,11 @@ contract RepayViaLPFeesTest is Test {
     }
 
     function testSwapAssetsOnUniswap() public {
-        // uint256 usdcAmount = 1000 * 1e6;
-        // deal(address(usdc), alice, usdcAmount, true);
-        // vm.startPrank(alice);
-        // usdc.approve(address(repayViaLPFees), usdcAmount);
-        // repayViaLPFees.depositAssetOnAave(address(usdc), usdcAmount);
-
         deal(address(weth), alice, 1e18, false);
-        vm.startPrank(alice);
         uint256 userBalanceBefore = usdc.balanceOf(alice);
         uint256 wethBalance = weth.balanceOf(alice);
         console.log("Balance of msg.sender: ", wethBalance);
+        vm.startPrank(alice);
         weth.approve(address(repayViaLPFees), wethBalance);
         // Get the amount of assetOut that will be received outside of the contract
         uint256 amountOut = quoter.quoteExactInputSingle(
@@ -115,14 +121,14 @@ contract RepayViaLPFeesTest is Test {
             0
         );
         console.log("Amount out: ", amountOut);
-        repayViaLPFees.swapAssetsOnUniswap(address(weth), wethBalance, address(usdc), amountOut, block.timestamp);
+        uint256 exactUsdcOut = repayViaLPFees.swapAssetsOnUniswap(address(weth), wethBalance, address(usdc), amountOut, block.timestamp);
         vm.stopPrank();
         uint256 userBalanceAfter = usdc.balanceOf(alice);
-        assertGt(userBalanceAfter, userBalanceBefore, "User should have more usdc after the swap");
+        assertEq(userBalanceAfter, userBalanceBefore + exactUsdcOut, "User should have more usdc after the swap");
     }
 
     // function to test swap ausdc back to usdc
-    function testSwapAusdcToUsdc() public {
+    function testDepositBorrowAddLiquidity() public {
         uint256 usdcAmount = 1000 * 1e6;
         deal(address(usdc), alice, usdcAmount, true);
         vm.startPrank(alice);
@@ -150,7 +156,7 @@ contract RepayViaLPFeesTest is Test {
         uint256 amountWETH = amountToBorrow;
         console.log("Amount of ETH: ", amountWETH);
         usdc.approve(address(repayViaLPFees), amountUSDC);
-        uint256 minPrice = 2000;
+        uint256 minPrice = 3000;
         uint256 maxPrice = 4000;
         uint8 token0Decimal = 6;
         uint8 token1Decimal = 18;
@@ -160,8 +166,15 @@ contract RepayViaLPFeesTest is Test {
         console.log("tickUpper: ", tickUpper);
         (,, uint256 actualUsdcAdded, uint256 actualWethAdded) = 
             repayViaLPFees.addLiquidity{value: amountWETH}(amountUSDC, 0, amountWETH, 0, tickLower, tickUpper, LP_INTEREST_RATE, address(this), block.timestamp + 300);
-        // vm.startPrank(alice);
-        // assertGt(alice.balance, 0, "Alice should have borrowed eth");
+        // Get liquidity position of this contract
+        // (
+        //     uint128 liquidity,
+        //     uint256 feeGrowthInside0LastX128,
+        //     uint256 feeGrowthInside1LastX128,
+        //     uint128 tokensOwed0,
+        //     uint128 tokensOwed1
+        // ) = uniswapUsdcWethPool.positions(keccak256(abi.encodePacked(address(this), tickLower, tickUpper))); // Get this address from uniswap factory
+
     }
 
     function testAddLiquidity() public {
