@@ -43,7 +43,7 @@ contract FlashLoanContract is IFlashLoanSimpleReceiver {
 
     // Test task 1
     constructor(NetworkConfig memory activeNetworkConfig, address aliceAddress) {
-        // Set up the ETHEREUM_RPC_URL to fork the ethereum mainnet
+        // Set up the ACTIVE_RPC_URL to fork the ethereum mainnet
         usdc = IERC20(activeNetworkConfig.usdcAddress);
         weth = IERC20(activeNetworkConfig.wethAddress);
 

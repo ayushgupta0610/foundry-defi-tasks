@@ -22,7 +22,8 @@ contract OnChainLeverageTest is Test {
     TestConfigEthereum private testConfigEthereum;
 
     function setUp() public {
-        vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/<ALCHEMY_API_KEY>", 20420407);
+        string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
+        vm.createSelectFork(rpcUrl);
         // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
         (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress, address positionManagerAddress) = testConfigEthereum.activeNetworkConfig();

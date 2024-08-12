@@ -34,10 +34,11 @@ contract DefiEthereumTest is Test {
 
     // Test task 1
     function setUp() public {
-        vm.createSelectFork("https://eth-mainnet.g.alchemy.com/v2/<ALCHEMY_API_KEY>", 20346809); // Using a specific block for consistency
+        string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
+        vm.createSelectFork(rpcUrl);
         TestConfigEthereum testConfig = new TestConfigEthereum();
 
-        // Set up the ETHEREUM_RPC_URL to fork the ethereum mainnet
+        // Set up the ACTIVE_RPC_URL to fork the ethereum mainnet
         activeNetworkConfig = testConfig.getEthMainnetConfig();
         usdc = IERC20(activeNetworkConfig.usdcAddress);
         weth = IERC20(activeNetworkConfig.wethAddress);
