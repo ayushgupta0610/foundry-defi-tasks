@@ -7,6 +7,7 @@ import {OnChainLeverage} from "../src/ethereum/rareskills/OnChainLeverage.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
 import {IPriceOracleGetter} from "@aave/v3-core/contracts/interfaces/IPriceOracleGetter.sol";
+import {NetworkConfig} from "../src/ethereum/NetworkConfig.sol";
 
 contract OnChainLeverageTest is Test {
 
@@ -33,7 +34,7 @@ contract OnChainLeverageTest is Test {
         priceOracle = IPriceOracleGetter(aavePriceOracleAddress);
 
         // Deploy OnChainLeverage contract
-        OnChainLeverage.NetworkConfig memory activeNetwork = OnChainLeverage.NetworkConfig({
+        NetworkConfig memory activeNetwork = NetworkConfig({
             usdcAddress: usdcAddress,
             wethAddress: wethAddress,
             aavePoolAddress: aavePoolAddress,

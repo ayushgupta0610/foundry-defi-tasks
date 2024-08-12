@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
-import {NetworkConfig} from "../src/ethereum/FlashLoanContract.sol";
+import {NetworkConfig} from "../src/ethereum/NetworkConfig.sol";
 
 contract TestConfigEthereum is Test {
     NetworkConfig public activeNetworkConfig;

@@ -12,19 +12,8 @@ import {IVariableDebtToken} from "@aave/v3-core/contracts/interfaces/IVariableDe
 import {IFlashLoanSimpleReceiver} from "@aave/v3-core/contracts/flashloan/interfaces/IFlashLoanSimpleReceiver.sol";
 import {IPoolAddressesProvider} from "@aave/v3-core/contracts/interfaces/IPoolAddressesProvider.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
+import {NetworkConfig} from "./NetworkConfig.sol";
 
-struct NetworkConfig {
-    address usdcAddress;
-    address wethAddress;
-    address aavePoolAddress;
-    address wrappedTokenGatewayAddress;
-    address creditDelegationToken;
-    address aavePriceOracleAddress;
-    address quoterAddress;
-    address swapRouterAddress;
-    address cometAddress;
-    address positionManagerAddress;
-}
 
 contract FlashLoanContract is IFlashLoanSimpleReceiver {
     uint256 private constant ORACLE_PRECISION = 1e8;

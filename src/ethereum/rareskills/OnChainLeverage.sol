@@ -14,25 +14,12 @@ import {IPoolAddressesProvider} from "@aave/v3-core/contracts/interfaces/IPoolAd
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
 import {IPoolDataProvider} from "@aave/v3-core/contracts/interfaces/IPoolDataProvider.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
+import {NetworkConfig} from "./../NetworkConfig.sol";
 
 contract OnChainLeverage is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     error OnChainLeverage__InsufficientAssetProvided();
-
-    struct NetworkConfig {
-        address usdcAddress;
-        address wethAddress;
-        address aavePoolAddress;
-        address wrappedTokenGatewayAddress;
-        address creditDelegationToken;
-        address aavePriceOracleAddress;
-        address quoterAddress;
-        address swapRouterAddress;
-        address cometAddress;
-        address positionManagerAddress;
-    } 
 
     uint24 private constant UNISWAP_FEE = 3000;
     address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // Jeffrey: Not a recommended practice
