@@ -23,8 +23,9 @@ contract OnChainLeverageTest is Test {
     TestConfigEthereum private testConfigEthereum;
 
     function setUp() public {
+        uint256 blockNumber = vm.envUint("BLOCK_NUMBER");
         string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
-        vm.createSelectFork(rpcUrl);
+        vm.createSelectFork(rpcUrl, blockNumber);
         // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
         (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress, address positionManagerAddress) = testConfigEthereum.activeNetworkConfig();

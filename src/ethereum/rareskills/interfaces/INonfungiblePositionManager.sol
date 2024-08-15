@@ -34,4 +34,33 @@ interface INonfungiblePositionManager {
             uint256 amount1
         );
 
+    struct CollectParams {
+        uint256 tokenId;
+        address recipient;
+        uint128 amount0Max;
+        uint128 amount1Max;
+    }
+
+    /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
+    /// @param params tokenId The ID of the NFT for which tokens are being collected,
+    /// recipient The account that should receive the tokens,
+    /// amount0Max The maximum amount of token0 to collect,
+    /// amount1Max The maximum amount of token1 to collect
+    /// @return amount0 The amount of fees collected in token0
+    /// @return amount1 The amount of fees collected in token1
+    function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+
+    /// @notice Gives permission to `to` to transfer `tokenId` token to another account
+    /// @dev The approval is cleared when the token is transferred
+    /// @param to Address to be given the approval
+    /// @param tokenId uint256 ID of the token to be approved
+    function approve(address to, uint256 tokenId) external;
+
+    /// @notice Safely transfers `tokenId` token from `from` to `to`
+    /// @dev See {IERC721-safeTransferFrom}.
+    /// @param from The current owner of the token
+    /// @param to The new owner
+    /// @param tokenId The token to transfer
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;
+
 }

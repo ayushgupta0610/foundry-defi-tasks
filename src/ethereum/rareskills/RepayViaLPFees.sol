@@ -19,9 +19,10 @@ import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICredit
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {DataTypes} from "@aave/v3-core/contracts/protocol/libraries/types/DataTypes.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {NetworkConfig} from "../NetworkConfig.sol";
 
-contract RepayViaLPFees {
+contract RepayViaLPFees is IERC721Receiver {
     using SafeTransferLib for address;
 
     error RepayViaLPFees__AssetTransferFailed();
@@ -262,8 +263,60 @@ contract RepayViaLPFees {
         return (lowerTick, upperTick);
     }
 
+    function collectLPFees(uint256 tokenId, address recipient) external {
+        // Transfer the LP position to this contract
+        positionManager.safeTransferFrom(msg.sender, address(this), tokenId);
+
+        // 1. Approve the position manager to spend the LP position
+        positionManager.approve(address(positionManager), tokenId);
+
+        // Collect fees
+        (uint256 amount0, uint256 amount1) = positionManager.collect(
+            INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: address(this),
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            })
+        );
+
+        console.log("Collected USDC:", amount0);
+        console.log("Collected WETH:", amount1);
+
+        // Optionally, swap WETH to USDC
+        // if (amount1 > 0) {
+        //     WETH.approve(address(swapRouter), amount1);
+        //     ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+        //         tokenIn: address(WETH),
+        //         tokenOut: address(USDC),
+        //         fee: 3000, // Assuming 0.3% fee pool, adjust if necessary
+        //         recipient: msg.sender,
+        //         deadline: block.timestamp + 300,
+        //         amountIn: amount1,
+        //         amountOutMinimum: 0, // Be careful with this in production!
+        //         sqrtPriceLimitX96: 0
+        //     });
+        //     uint256 amountOut = swapRouter.exactInputSingle(params);
+        //     console.log("Swapped WETH to USDC:", amountOut);
+        // }
+
+        // // Transfer remaining USDC to the owner
+        // if (amount0 > 0) {
+        //     USDC.transfer(msg.sender, amount0);
+        // }
+    }
+
     // Required because of IWETH9.withdraw() function
     fallback() external payable {}
 
     receive() external payable {}
+
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
 }

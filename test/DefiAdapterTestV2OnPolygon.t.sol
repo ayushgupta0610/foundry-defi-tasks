@@ -28,6 +28,9 @@ contract DefiAdapterTest is Test {
 
     // Test task 1
     function setUp() public {
+        uint256 blockNumber = vm.envUint("60610081");
+        string memory rpcUrl = vm.envString("POLYGON_RPC_URL");
+        vm.createSelectFork(rpcUrl, blockNumber);
         TestConfig testConfig = new TestConfig();
 
         // Set up the POLYGON_RPC_URL to fork the mainnet

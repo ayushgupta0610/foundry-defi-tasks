@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Test, console} from "forge-std/Test.sol";
 import {TestConfigEthereum} from "./TestConfigEthereum.t.sol";
 import {RepayViaLPFees} from "../src/ethereum/rareskills/RepayViaLPFees.sol";
+import {INonfungiblePositionManager} from "../src/ethereum/rareskills/interfaces/INonfungiblePositionManager.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ICreditDelegationToken} from "@aave/v3-core/contracts/interfaces/ICreditDelegationToken.sol";
 import {IPriceOracleGetter} from "@aave/v3-core/contracts/interfaces/IPriceOracleGetter.sol";
@@ -16,6 +17,7 @@ import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV
 import {TickMath} from "../src/ethereum/rareskills/libraries/TickMath.sol";
 import {FullMath} from "../src/ethereum/rareskills/libraries/FullMath.sol";
 import {NetworkConfig} from "../src/ethereum/NetworkConfig.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 
 contract RepayViaLPFeesTest is Test {
@@ -37,10 +39,12 @@ contract RepayViaLPFeesTest is Test {
     IPool private aavePool;
     IQuoter private quoter;
     ISwapRouter private swapRouter;
+    INonfungiblePositionManager private positionManager;
 
     function setUp() public {
+        uint256 blockNumber = vm.envUint("BLOCK_NUMBER");
         string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
-        vm.createSelectFork(rpcUrl);
+        vm.createSelectFork(rpcUrl, blockNumber);
          // Deploy the contract
         testConfigEthereum = new TestConfigEthereum();
         (address usdcAddress, address wethAddress, address aavePoolAddress, address wrappedTokenGatewayAddress, address creditDelegationToken, address aavePriceOracleAddress, address quoterAddress, address swapRouterAddress, address cometAddress, address positionManagerAddress) = testConfigEthereum.activeNetworkConfig();
@@ -66,7 +70,7 @@ contract RepayViaLPFeesTest is Test {
         aavePool = IPool(aavePoolAddress);
         quoter = IQuoter(quoterAddress);
         swapRouter = ISwapRouter(swapRouterAddress);
-
+        positionManager = INonfungiblePositionManager(positionManagerAddress);
     }
 
     // function to test deposit usdc into aave
@@ -194,12 +198,48 @@ contract RepayViaLPFeesTest is Test {
         int24 tickSpacing = 60; // Common tick spacing, adjust as needed
         (int24 tickLower, int24 tickUpper) = repayViaLPFees.getLowerAndUpperTicks(minPrice, maxPrice, token0Decimal, token1Decimal, tickSpacing);
 
-        (,, uint256 actualUsdcAdded, uint256 actualWethAdded) = 
+        (uint256 tokenId,, uint256 actualUsdcAdded, uint256 actualWethAdded) = 
             repayViaLPFees.addLiquidity{value: amountETH}(amountUSDC, 0, amountETH, 0, tickLower, tickUpper, LP_INTEREST_RATE, address(this), block.timestamp + 300);
-        // console.log("tokenId: ", tokenId);
-        // console.log("liquidity: ", liquidity);
+        console.log("tokenId: ", tokenId);
         console.log("actualUsdcAdded: ", actualUsdcAdded);
         console.log("actualWethAdded: ", actualWethAdded);
+        // Mock a couple of weth and usdc swaps to increase the liquidity
+        vm.roll(block.number + 100000);
+        vm.warp(block.timestamp + 10000);
+        // Swap 1
+        uint256 wethAmount = 100 * 1e18;
+        weth.approve(address(repayViaLPFees), wethAmount);
+        deal(address(weth), address(this), wethAmount, false);
+        uint256 amountOut = quoter.quoteExactInputSingle(
+            address(weth),
+            address(usdc),
+            UNISWAP_FEE,
+            wethAmount,
+            0
+        );
+        uint256 exactUsdcOut = repayViaLPFees.swapAssetsOnUniswap(address(weth), wethAmount, address(usdc), amountOut, block.timestamp);
+        console.log("exactUsdcOut: ", exactUsdcOut);
+        // Swap 2
+        uint256 usdcAmount = 100000000 * 1e6;
+        usdc.approve(address(repayViaLPFees), usdcAmount);
+        deal(address(usdc), address(this), usdcAmount, true);
+        amountOut = quoter.quoteExactInputSingle(
+            address(usdc),
+            address(weth),
+            UNISWAP_FEE,
+            usdcAmount,
+            0
+        );
+        uint256 exactWethOut = repayViaLPFees.swapAssetsOnUniswap(address(usdc), usdcAmount, address(weth), amountOut, block.timestamp);
+        console.log("exactWethOut: ", exactWethOut);
+        // Collect LP fees
+        vm.roll(block.number + 100000);
+        vm.warp(block.timestamp + 10000);
+        // Approve repayViaLPFees to transferFrom NFT token with tokenId
+        positionManager.approve(address(repayViaLPFees), tokenId);
+        repayViaLPFees.collectLPFees(tokenId, address(this));
+        console.log("USDC balance: ", usdc.balanceOf(address(this)));
+        console.log("WETH balance: ", weth.balanceOf(address(this)));
     }
 
     

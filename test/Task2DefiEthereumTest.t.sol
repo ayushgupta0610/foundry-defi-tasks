@@ -37,8 +37,9 @@ contract DefiEthereumTest is Test {
 
     // Test task 1
     function setUp() public {
+        uint256 blockNumber = vm.envUint("BLOCK_NUMBER");
         string memory rpcUrl = vm.envString("ACTIVE_RPC_URL");
-        vm.createSelectFork(rpcUrl);
+        vm.createSelectFork(rpcUrl, blockNumber);
         TestConfigEthereum testConfig = new TestConfigEthereum();
 
         // Set up the ACTIVE_RPC_URL to fork the ethereum mainnet
